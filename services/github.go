@@ -105,51 +105,74 @@ func GitHubCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	userModel := &db.UserModel{DB: db.DB}
 
+	var newUser *db.User
 	// Check if the user already exists
-	newUser, err := userModel.GetUserByEmail(user.Email)
+	existingUser, err := userModel.GetUserByEmail(user.Email)
 	if err == nil {
 		// User exists, update token
+		newUser = existingUser
 		stored_data := StoreAccessToken(newUser.USERNAME, accessToken, newUser.ID)
 		if stored_data {
 			fmt.Println("Data Updated Successfully")
-			w.WriteHeader(http.StatusOK)
 		} else {
 			fmt.Println("Unable to update token")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(w, "Welcome back, %s! Your email is %s", newUser.USERNAME, newUser.EMAIL)
+		fmt.Printf("Welcome back, %s! Your email is %s\n", newUser.USERNAME, newUser.EMAIL)
 	} else {
 		// Create new user
-		newUser, err := userModel.CreateUser(int64(user.ID), user.Login, user.Email)
+		createdUser, err := userModel.CreateUser(int64(user.ID), user.Login, user.Email)
 		if err != nil {
 			http.Error(w, "Failed to save user: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
+		newUser = createdUser
 
 		// Store the github data
 		stored_data := StoreAccessToken(newUser.USERNAME, accessToken, newUser.ID)
 		if stored_data {
 			fmt.Println("Data Stored Successfully")
-			w.WriteHeader(http.StatusOK)
 		} else {
 			fmt.Println("Unable to save token")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(w, "Welcome, %s! Your email is %s", newUser.USERNAME, newUser.EMAIL)
+		fmt.Printf("Welcome, %s! Your email is %s\n", newUser.USERNAME, newUser.EMAIL)
 	}
 
-	fmt.Fprintf(w, "\nYou can now continue working in your game engine")
+	// CREATE SESSION FOR THE USER
+	sessionID, err := sessionManager.CreateSession(newUser.ID, newUser.USERNAME, newUser.EMAIL)
+	if err != nil {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+
+	// Return session ID in response header and body
+	w.Header().Set("X-Session-ID", sessionID)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"message":    "Login successful",
+		"session_id": sessionID,
+		"user": map[string]interface{}{
+			"id":       newUser.ID,
+			"username": newUser.USERNAME,
+			"email":    newUser.EMAIL,
+		},
+	})
+
+	fmt.Println("\n✅ Session created:", sessionID)
+	fmt.Println("You can now use this session_id for authenticated requests")
 }
 
 func StoreAccessToken(username, githubToken string, user_id uuid.UUID) bool {
 	tokenModel := &db.TokenModel{DB: db.DB}
 
-	// Try to get existing token
 	existingToken, err := tokenModel.GetToken(username)
 	if err != nil {
-		// Token doesn't exist, create new one
 		_, err := tokenModel.SaveToken(githubToken, username, user_id)
 		if err != nil {
 			fmt.Println("Error: ", err)
@@ -160,7 +183,6 @@ func StoreAccessToken(username, githubToken string, user_id uuid.UUID) bool {
 		return true
 	}
 
-	// Token exists, update it
 	fmt.Printf("Token already exists for %s, updating...\n", existingToken.USERNAME)
 	err = tokenModel.UpdateToken(username, githubToken)
 	if err != nil {
@@ -203,5 +225,26 @@ func GetToken(w http.ResponseWriter, r *http.Request) {
 		"github_token": github_data.GITHUB_TOKEN,
 		"user_id":      github_data.USER_ID,
 		"created_at":   github_data.CREATED_AT,
+	})
+}
+
+// Logout - Destroys the user session
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	sessionID := r.Header.Get("X-Session-ID")
+	if sessionID == "" {
+		cookie, err := r.Cookie("session_id")
+		if err == nil {
+			sessionID = cookie.Value
+		}
+	}
+
+	if sessionID != "" {
+		sessionManager.DeleteSession(sessionID)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Logged out successfully",
 	})
 }

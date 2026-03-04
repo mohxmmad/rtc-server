@@ -1,7 +1,9 @@
-package services;
+package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -13,21 +15,190 @@ import (
 	"github.com/google/uuid"
 )
 
+// Session storage
+type Session struct {
+	ID        string
+	UserID    uuid.UUID
+	Username  string
+	Email     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+}
+
+type SessionManager struct {
+	sessions map[string]*Session
+	mu       sync.RWMutex
+	timeout  time.Duration
+}
+
+var sessionManager = &SessionManager{
+	sessions: make(map[string]*Session),
+	timeout:  24 * time.Hour, // 24 hour session timeout
+}
+
+// Initialize session cleanup
+func init() {
+	go sessionManager.cleanupExpiredSessions()
+}
+
+// Generate secure session ID
+func generateSessionID() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// CreateSession - Creates a new session for authenticated user
+func (sm *SessionManager) CreateSession(userID uuid.UUID, username, email string) (string, error) {
+	sessionID, err := generateSessionID()
+	if err != nil {
+		return "", err
+	}
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session := &Session{
+		ID:        sessionID,
+		UserID:    userID,
+		Username:  username,
+		Email:     email,
+		CreatedAt: time.Now(),
+		ExpiresAt: time.Now().Add(sm.timeout),
+	}
+
+	sm.sessions[sessionID] = session
+	log.Printf("Session created for user %s (ID: %s)", username, sessionID)
+	return sessionID, nil
+}
+
+// GetSession - Retrieves session by ID
+func (sm *SessionManager) GetSession(sessionID string) (*Session, bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+
+	session, exists := sm.sessions[sessionID]
+	if !exists {
+		return nil, false
+	}
+
+	// Check if session is expired
+	if time.Now().After(session.ExpiresAt) {
+		return nil, false
+	}
+
+	return session, true
+}
+
+// DeleteSession - Removes a session
+func (sm *SessionManager) DeleteSession(sessionID string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	delete(sm.sessions, sessionID)
+	log.Printf("Session deleted: %s", sessionID)
+}
+
+// RefreshSession - Extends session expiration
+func (sm *SessionManager) RefreshSession(sessionID string) bool {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	session, exists := sm.sessions[sessionID]
+	if !exists {
+		return false
+	}
+
+	session.ExpiresAt = time.Now().Add(sm.timeout)
+	return true
+}
+
+// Cleanup expired sessions periodically
+func (sm *SessionManager) cleanupExpiredSessions() {
+	ticker := time.NewTicker(1 * time.Hour)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		sm.mu.Lock()
+		now := time.Now()
+		for id, session := range sm.sessions {
+			if now.After(session.ExpiresAt) {
+				delete(sm.sessions, id)
+				log.Printf("Expired session cleaned up: %s", id)
+			}
+		}
+		sm.mu.Unlock()
+	}
+}
+
+// SessionAuth Middleware - Verifies session and adds user info to context
+func SessionAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get session ID from header or cookie
+		sessionID := r.Header.Get("X-Session-ID")
+		if sessionID == "" {
+			// Try to get from cookie as fallback
+			cookie, err := r.Cookie("session_id")
+			if err == nil {
+				sessionID = cookie.Value
+			}
+		}
+
+		if sessionID == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Session ID required. Please login first.",
+			})
+			return
+		}
+
+		// Validate session
+		session, exists := sessionManager.GetSession(sessionID)
+		if !exists {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "Invalid or expired session. Please login again.",
+			})
+			return
+		}
+
+		// Refresh session on each valid request
+		sessionManager.RefreshSession(sessionID)
+
+		// Add session info to context
+		ctx := context.WithValue(r.Context(), "session", session)
+		ctx = context.WithValue(ctx, "user_id", session.UserID)
+		ctx = context.WithValue(ctx, "username", session.Username)
+		ctx = context.WithValue(ctx, "email", session.Email)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// GetSessionFromContext - Helper to extract session from request context
+func GetSessionFromContext(r *http.Request) (*Session, bool) {
+	session, ok := r.Context().Value("session").(*Session)
+	return session, ok
+}
+
 // CORS Middleware
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow specific origins in production
 		allowedOrigins := os.Getenv("ALLOWED_ORIGINS")
 		if allowedOrigins == "" {
-			allowedOrigins = "*" // Development only
+			allowedOrigins = "*"
 		}
 
 		w.Header().Set("Access-Control-Allow-Origin", allowedOrigins)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID, X-Project-ID")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-ID, X-Project-ID, X-Session-ID")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Session-ID")
 
-		// Handle preflight
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -41,22 +212,10 @@ func CORS(next http.Handler) http.Handler {
 func RequestLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-
-		// Create response writer wrapper to capture status code
 		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
 		next.ServeHTTP(wrapped, r)
-
 		duration := time.Since(start)
-		log.Printf(
-			"%s %s %s %d %v %s",
-			r.RemoteAddr,
-			r.Method,
-			r.RequestURI,
-			wrapped.statusCode,
-			duration,
-			r.UserAgent(),
-		)
+		log.Printf("%s %s %s %d %v %s", r.RemoteAddr, r.Method, r.RequestURI, wrapped.statusCode, duration, r.UserAgent())
 	})
 }
 
@@ -74,9 +233,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 type RateLimiter struct {
 	visitors map[string]*visitor
 	mu       sync.RWMutex
-	rate     int           // requests per minute
-	burst    int           // max burst size
-	cleanup  time.Duration // cleanup interval
+	rate     int
+	burst    int
+	cleanup  time.Duration
 }
 
 type visitor struct {
@@ -133,7 +292,6 @@ func (v *visitor) allow(rate, burst int) bool {
 	now := time.Now()
 	elapsed := now.Sub(v.lastRefill)
 
-	// Refill tokens based on time elapsed
 	tokensToAdd := int(elapsed.Seconds() * float64(rate) / 60.0)
 	if tokensToAdd > 0 {
 		v.tokens += tokensToAdd
@@ -143,7 +301,6 @@ func (v *visitor) allow(rate, burst int) bool {
 		v.lastRefill = now
 	}
 
-	// Check if request is allowed
 	if v.tokens > 0 {
 		v.tokens--
 		return true
@@ -154,7 +311,6 @@ func (v *visitor) allow(rate, burst int) bool {
 
 func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Extract IP address
 		ip := r.RemoteAddr
 		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 			ip = strings.Split(forwarded, ",")[0]
@@ -174,83 +330,35 @@ func (rl *RateLimiter) Limit(next http.Handler) http.Handler {
 	})
 }
 
-// Authentication Middleware
-func AuthRequired(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Check for Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Authorization header required",
-			})
-			return
-		}
-
-		// Extract token (Bearer token format)
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Invalid authorization format. Use: Bearer <token>",
-			})
-			return
-		}
-
-		token := parts[1]
-
-		// Validate token (implement your token validation logic)
-		// For now, we'll just check if it's not empty
-		if token == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Invalid token",
-			})
-			return
-		}
-
-		// Add token to context for use in handlers
-		ctx := context.WithValue(r.Context(), "token", token)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// User Context Middleware - Adds user ID to request context
+// User Context Middleware
 func UserContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Header.Get("X-User-ID")
 		if userID != "" {
-			// Validate UUID format
 			if _, err := uuid.Parse(userID); err == nil {
 				ctx := context.WithValue(r.Context(), "user_id", userID)
 				r = r.WithContext(ctx)
 			}
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Project Context Middleware - Adds project ID to request context
+// Project Context Middleware
 func ProjectContext(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		projectID := r.Header.Get("X-Project-ID")
 		if projectID != "" {
-			// Validate UUID format
 			if _, err := uuid.Parse(projectID); err == nil {
 				ctx := context.WithValue(r.Context(), "project_id", projectID)
 				r = r.WithContext(ctx)
 			}
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
 
-// Recovery Middleware - Recovers from panics
+// Recovery Middleware
 func Recovery(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -267,7 +375,7 @@ func Recovery(next http.Handler) http.Handler {
 	})
 }
 
-// Content Type Middleware - Ensures JSON content type for API routes
+// Content Type Middleware
 func JSONContentType(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

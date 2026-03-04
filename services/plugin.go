@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 type MetaUser struct {
@@ -258,3 +260,54 @@ func PushProject(w http.ResponseWriter, r *http.Request) {
 // 		"total":      len(requests),
 // 	})
 // }
+
+func JoinCollaboration(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Attempting to join collaboration...")
+	var req struct {
+		UserEmail string `json:"user_email"`
+		Token     string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid request body"})
+		return
+	}
+
+	collabID, err := uuid.Parse(req.Token)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Invalid token format"})
+		return
+	}
+
+	collabModel := &db.CollaboratorModel{DB: db.DB}
+	err = collabModel.UpdateCollaborationStatus(collabID, "approved")
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to approve collaboration: " + err.Error()})
+		return
+	}
+
+	collab, err := collabModel.GetCollaborationByID(collabID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch collaboration details"})
+		return
+	}
+
+	projectModel := &db.ProjectModel{DB: db.DB}
+	project, err := projectModel.GetProjectByID(collab.ProjectID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Failed to fetch project details"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"message":    "Joined collaboration successfully",
+		"project_id": project.ID.String(),
+		"repo_url":   "https://github.com/TODO/" + project.Name,
+	})
+}

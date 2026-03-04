@@ -73,10 +73,8 @@ POST /push/manual
 Content-Type: application/json
 
 {
-  "owner": "username",
-  "project_name": "MyUnityGame",
-  "description": "A cool Unity game",
-  "github_token": "ghp_xxxx..."
+  "owner": "owner@abc.com",
+  "project_name": "MyUnityGame"
 }
 ```
 

@@ -137,13 +137,15 @@ func RequestCollaboration(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("Status: %s\n", notification.Status)
 	fmt.Printf("==========================================\n\n")
 
+	// Add email logic here to notify collaborator in real implementation
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":      true,
-		"message":      "Collaboration request sent successfully",
-		"collab_id":    collab.ID,
-		"status":       collab.Status,
-		"notification": notification,
+		"success":   true,
+		"message":   "Collaboration request sent successfully",
+		"collab_id": collab.ID,
+		"status":    collab.Status,
+		//"notification": notification,
 	})
 }
 
@@ -198,13 +200,29 @@ func ApproveCollaboration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// VERIFY: The logged-in user (from session) must be the collaborator
-	if collab.UserID != session.UserID {
-		w.WriteHeader(http.StatusForbidden)
+	// Get collaborator user
+	userModel := &db.UserModel{DB: db.DB}
+	collaborator, err := userModel.GetUserByID(collab.UserID)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(map[string]string{
-			"error": "You are not authorized to approve/reject this collaboration request",
+			"error": "Failed to fetch collaborator details",
 		})
 		return
+	}
+
+	// Authenticate collaborator using token
+	tokenModel := &db.TokenModel{DB: db.DB}
+	storedToken, err := tokenModel.GetToken(collaborator.USERNAME)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error": "Collaborator authentication failed",
+		})
+		return
+	} else {
+		fmt.Println("Stored Token: ", storedToken.GITHUB_TOKEN)
+		// In real implementation, verify token validity with session ID implementation via middleware to be added
 	}
 
 	// Update collaboration status

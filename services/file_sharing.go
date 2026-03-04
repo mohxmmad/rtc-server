@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -83,7 +82,6 @@ func ShareFile(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	fmt.Println("Sender", sender) // Debugging line
 
 	recipient, err := userModel.GetUserByEmail(req.RecipientEmail)
 	if err != nil {
@@ -174,8 +172,6 @@ func ShareCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("Sender", sender) // Debugging line
-
 	recipient, err := userModel.GetUserByEmail(req.RecipientEmail)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -242,7 +238,6 @@ func ShareBulkFiles(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	fmt.Println("Sender", sender) // Debugging line
 
 	recipient, err := userModel.GetUserByEmail(req.RecipientEmail)
 	if err != nil {

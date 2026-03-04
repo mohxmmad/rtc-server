@@ -55,7 +55,7 @@ func GetProjects(w http.ResponseWriter, r *http.Request) {
 
 		for i := 0; i < len(projects); i++ {
 			project := projects[i]
-			fmt.Fprintf(w, "ID : %d , Owner ID : %d, Name : %s, Description : %s, Created At : %s \n", project.ID, project.OwnerID, project.Name, project.Description, project.CreatedAt)
+			fmt.Fprintf(w, "ID : %s , Owner ID : %s, Name : %s, Description : %s, Created At : %s \n", project.ID.String(), project.OwnerID.String(), project.Name, project.Description, project.CreatedAt)
 		}
 	}
 }
@@ -84,7 +84,7 @@ func GetProject(w http.ResponseWriter, r *http.Request) {
 
 		}
 
-		fmt.Fprintf(w, "ID : %d , Owner ID : %d, Name : %s, Description : %s, Created At : %s \n", project.ID, project.OwnerID, project.Name, project.Description, project.CreatedAt)
+		fmt.Fprintf(w, "ID : %s , Owner ID : %s, Name : %s, Description : %s, Created At : %s \n", project.ID.String(), project.OwnerID.String(), project.Name, project.Description, project.CreatedAt)
 	}
 }
 

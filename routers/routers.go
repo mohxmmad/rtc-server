@@ -47,10 +47,7 @@ func SetupRoutes() *mux.Router {
 	protectedRoutes.Use(services.SessionAuth) // SESSION AUTH MIDDLEWARE
 	protectedRoutes.Use(rateLimiter.Limit)
 
-// WebSocket Routes (Protected)
-	protectedRoutes.HandleFunc("/ws", services.HandleWebSocket).Methods("GET")
-	protectedRoutes.HandleFunc("/ws/online-users", services.GetOnlineUsers).Methods("GET")
-	protectedRoutes.HandleFunc("/ws/user-status", services.CheckUserOnlineStatus).Methods("GET")
+
 
 	// Activity Tracking Routes (Protected)
 	protectedRoutes.HandleFunc("/activity/user", services.GetUserActivities).Methods("GET")

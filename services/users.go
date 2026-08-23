@@ -1,7 +1,7 @@
 package services
 
 import (
-	"app/urtc/db"
+	"app/rtc/db"
 	"fmt"
 	"net/http"
 

@@ -1,13 +1,16 @@
 package services
 
 import (
-	"app/urtc/db"
+	"app/rtc/db"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -17,6 +20,18 @@ import (
 )
 
 var githubOAuthConfig *oauth2.Config
+
+type LatestAuth struct {
+	SessionID   string    `json:"session_id"`
+	UserID      string    `json:"user_id"`
+	Username    string    `json:"username"`
+	Email       string    `json:"email"`
+	GitHubToken string    `json:"github_token"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+var latestAuthMu sync.RWMutex
+var latestAuthByState = map[string]*LatestAuth{}
 
 func init() {
 	err := godotenv.Load()
@@ -34,8 +49,11 @@ func init() {
 }
 
 func GitHubLoginHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Config:", githubOAuthConfig)
-	url := githubOAuthConfig.AuthCodeURL("randomstate")
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if state == "" {
+		state = "randomstate"
+	}
+	url := githubOAuthConfig.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
@@ -48,7 +66,6 @@ func GitHubCallbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	accessToken := token.AccessToken
-	fmt.Println(accessToken)
 
 	client := oauth2.NewClient(context.Background(), oauth2.StaticTokenSource(token))
 	resp, err := client.Get("https://api.github.com/user")
@@ -148,6 +165,18 @@ func GitHubCallbackHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if state != "" {
+		saveLatestAuth(state, &LatestAuth{
+			SessionID:   sessionID,
+			UserID:      newUser.ID.String(),
+			Username:    newUser.USERNAME,
+			Email:       newUser.EMAIL,
+			GitHubToken: accessToken,
+			CreatedAt:   time.Now(),
+		})
+	}
+
 	// Return session ID in response header and body
 	w.Header().Set("X-Session-ID", sessionID)
 	w.Header().Set("Content-Type", "application/json")
@@ -166,6 +195,76 @@ func GitHubCallbackHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("\n✅ Session created:", sessionID)
 	fmt.Println("You can now use this session_id for authenticated requests")
+}
+
+func saveLatestAuth(state string, auth *LatestAuth) {
+	state = strings.TrimSpace(state)
+	if state == "" {
+		return
+	}
+	latestAuthMu.Lock()
+	defer latestAuthMu.Unlock()
+	latestAuthByState[state] = auth
+}
+
+func GetLatestAuth(w http.ResponseWriter, r *http.Request) {
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	if state == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "state is required"})
+		return
+	}
+
+	latestAuthMu.RLock()
+	auth, ok := latestAuthByState[state]
+	latestAuthMu.RUnlock()
+	if !ok || auth == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "login snapshot not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"session_id":   auth.SessionID,
+		"github_token": auth.GitHubToken,
+		"user": map[string]interface{}{
+			"id":       auth.UserID,
+			"username": auth.Username,
+			"email":    auth.Email,
+		},
+		"created_at": auth.CreatedAt,
+	})
+}
+
+func GetSessionAuth(w http.ResponseWriter, r *http.Request) {
+	session, ok := GetSessionFromContext(r)
+	if !ok {
+		w.WriteHeader(http.StatusUnauthorized)
+		json.NewEncoder(w).Encode(map[string]string{"error": "Session not found"})
+		return
+	}
+
+	tokenModel := &db.TokenModel{DB: db.DB}
+	token, err := tokenModel.GetToken(session.Username)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"error": "GitHub token not found"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
+		"session_id":   session.ID,
+		"github_token": token.GITHUB_TOKEN,
+		"user": map[string]interface{}{
+			"id":       session.UserID.String(),
+			"username": session.Username,
+			"email":    session.Email,
+		},
+	})
 }
 
 func StoreAccessToken(username, githubToken string, user_id uuid.UUID) bool {

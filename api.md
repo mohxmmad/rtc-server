@@ -1,5 +1,7 @@
 # RTC Server API Documentation
 
+> Repo creation and collaborator setup are deprecated. The backend now focuses on auth, OAuth, sessions, and token restore.
+
 ## 🔐 Authentication
 
 Most endpoints require authentication via GitHub OAuth token. Include the token in the `Authorization` header:

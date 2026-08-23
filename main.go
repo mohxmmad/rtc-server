@@ -1,9 +1,9 @@
 package main
 
 import (
-	"app/urtc/db"
-	"app/urtc/routers"
-	"app/urtc/services"
+	"app/rtc/db"
+	"app/rtc/routers"
+	"app/rtc/services"
 	"log"
 	"net/http"
 	"os"
@@ -62,18 +62,19 @@ func main() {
 	corsHandler := handlers.CORS(
 		handlers.AllowedOrigins(allowedOrigins),
 		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}),
-		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-User-ID", "X-Project-ID"}),
+		handlers.AllowedHeaders([]string{"Content-Type", "Authorization", "X-User-ID", "X-Project-ID", "X-Session-ID"}),
+		handlers.ExposedHeaders([]string{"X-Session-ID"}),
 		handlers.AllowCredentials(),
 	)(handler)
 
 	// Start server
 	log.Printf("===========================================")
-	log.Printf("Server starting on port %s", port)
+	log.Printf("RTC server starting on port %s", port)
 	log.Printf("===========================================")
 	log.Printf("API base URL: http://localhost:%s", port)
 	log.Printf("WebSocket endpoint: ws://localhost:%s/ws", port)
 	log.Printf("GitHub OAuth: http://localhost:%s/github/login", port)
-	log.Printf("Database: Connected ")
+	log.Printf("Database: Connected")
 	log.Printf("===========================================")
 
 	if err := http.ListenAndServe(":"+port, corsHandler); err != nil {

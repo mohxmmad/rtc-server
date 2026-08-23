@@ -1,7 +1,7 @@
-# rtc-server
+# RTC Server
 
-```rtc-server``` is a backend service that helps manage game/dev projects through GitHub.
-It handles login via GitHub, **creates repos** for new projects, and **keeps track** of users and projects in a database.
+This backend now focuses on GitHub OAuth, sessions, user auth, and token/session restore.
+Repo creation and collaborator management are deprecated.
 
 The idea is to make it easy to spin up a project, invite people, and manage repos without doing everything manually.
 
@@ -9,11 +9,9 @@ The idea is to make it easy to spin up a project, invite people, and manage repo
 
 Login with **GitHub OAuth** (session-based)
 
-Automatically create GitHub repos for new projects
+Session restore via saved session ID and backend token lookup
 
-Add/remove collaborators on repos
-
-Basic repo actions like push/pull (through server-side GitHub integration using ```libgit2sharp```)
+Basic repo actions like push/pull remain client-side for now
 
 **User CRUD** (create, update, delete)
 
@@ -33,7 +31,7 @@ Middleware for logging, CORS, etc. using ```gorilla/handlers + net/http```
 
 **HTTP**: net/http + gorilla/handlers
 
-**Platform**: GitHub API for repos & collaborators
+**Platform**: GitHub OAuth + token/session storage
 
 ## Project Structure
 

@@ -131,6 +131,6 @@ Full reference: [`api.md`](./api.md)
 
 **MIT** — github.com/Mohxmmad • 2025-2026
 
-Built for GRTC — Godot Realtime Collaboration 
+Built for **[GRTC](https://github.com/mohxmmad/grtc)** — Godot Realtime Collaboration 
 
 </p>

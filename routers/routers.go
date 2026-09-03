@@ -26,6 +26,11 @@ func SetupRoutes() *mux.Router {
 		w.Write([]byte("OK"))
 	}).Methods("GET")
 
+	// WebSocket realtime endpoints
+	r.HandleFunc("/ws", services.WebSocketHandler).Methods("GET")
+	r.HandleFunc("/ws/online-users", services.OnlineUsersHandler).Methods("GET")
+	r.HandleFunc("/ws/user-status", services.UserStatusHandler).Methods("GET")
+
 	// PUBLIC ROUTES - No session required
 	publicRoutes := r.PathPrefix("").Subrouter()
 	publicRoutes.Use(services.CORS)
@@ -46,8 +51,6 @@ func SetupRoutes() *mux.Router {
 	protectedRoutes.Use(services.Recovery)
 	protectedRoutes.Use(services.SessionAuth) // SESSION AUTH MIDDLEWARE
 	protectedRoutes.Use(rateLimiter.Limit)
-
-
 
 	// Activity Tracking Routes (Protected)
 	protectedRoutes.HandleFunc("/activity/user", services.GetUserActivities).Methods("GET")

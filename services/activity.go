@@ -29,7 +29,24 @@ func LogActivity(userID, projectID uuid.UUID, action, description string, metada
 	ipAddress := r.RemoteAddr
 	userAgent := r.UserAgent()
 
-	return activityModel.CreateActivity(userID, projectID, action, description, metadata, ipAddress, userAgent)
+	if err := activityModel.CreateActivity(userID, projectID, action, description, metadata, ipAddress, userAgent); err != nil {
+		return err
+	}
+
+	if projectID != uuid.Nil {
+		BroadcastActivityToProject(projectID.String(), map[string]interface{}{
+			"user_id":     userID.String(),
+			"project_id":  projectID.String(),
+			"action":      action,
+			"description": description,
+			"metadata":    metadata,
+			"ip_address":  ipAddress,
+			"user_agent":  userAgent,
+			"created_at":  time.Now().UTC().Format(time.RFC3339),
+		})
+	}
+
+	return nil
 }
 
 // GetUserActivities - Retrieves activities for a specific user

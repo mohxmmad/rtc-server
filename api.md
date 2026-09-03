@@ -407,15 +407,31 @@ Content-Type: application/json
 
 ### Connect to WebSocket
 ```
-ws://localhost:8080/ws?user_id={user_uuid}
+ws://localhost:8080/ws?session_id={session_id}&project_id={project_uuid}&client=unity
+```
+
+You can also connect first and authenticate with a message:
+
+```json
+{ "type": "auth", "session_id": "...", "client": "godot" }
 ```
 
 ### WebSocket Message Types
 
+#### Client Messages
+```json
+{ "type": "join", "project_id": "uuid" }
+{ "type": "leave", "project_id": "uuid" }
+{ "type": "publish", "project_id": "uuid", "event": "file_updated", "data": { "path": "Assets/Scripts/GameManager.cs", "file_content": "base64..." } }
+{ "type": "publish", "room": "project:abc", "event": "live_node", "data": { "path": "GRTC.tscn", "node_path": "Cube", "state": "T:0,1,0|R:0,0,0|S:1,1,1" } }
+{ "type": "sync_request" }
+{ "type": "ping" }
+```
+
 #### Connection Success
 ```json
 {
-  "type": "connection_success",
+  "type": "welcome",
   "message": "Connected to real-time collaboration server",
   "timestamp": "2024-01-01T00:00:00Z"
 }

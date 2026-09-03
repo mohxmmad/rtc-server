@@ -93,28 +93,33 @@ Full reference: [`api.md`](./api.md)
 
 ## Project Structure
 
-<p align="center"><img src="screenshots/structure.png" alt="Structure" width="600"></p>
+```
+.
+├── api.md
+├── db
+│  ├── activity.go
+│  ├── db.go
+│  ├── projects.go
+│  ├── token.go
+│  ├── users.go
+│  └── version_control.go
+├── go.mod
+├── go.sum
+├── LICENSE
+├── main.go
+├── README.md
+├── routers
+│  └── routers.go
+├── RTC demo.mp4
+└── services
+   ├── activity.go
+   ├── github.go
+   ├── middleware.go
+   ├── projects.go
+   ├── users.go
+   └── websocket.go
 
 ```
-rtc-server/
-├── main.go              # env, DB init, router + CORS + rate limit
-├── routers/routers.go   # /github/*, /health, /ws/*, /db/*, /api/*
-├── services/            # github.go, middleware.go, websocket.go, activity.go ...
-├── db/                  # postgres tables: users, projects, github_data ...
-├── screenshots/
-└── RTC demo.mp4         # ← this README's hero video
-```
-
-## Screenshots
-
-<p align="center">
-  <img src="screenshots/oauth.png" width="45%">
-  <img src="screenshots/new_project.png" width="45%">
-</p>
-<p align="center">
-  <img src="screenshots/logs.png" width="45%">
-  <img src="screenshots/collaboration.png" width="45%">
-</p>
 
 ## Tech Stack
 

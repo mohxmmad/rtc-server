@@ -19,16 +19,8 @@
 
 ### 🎬 Live Demo — Two Editors, One Project
 
-<p align="center">
-  <video src="https://github.com/Mohammad-416/rtc-server/raw/refs/heads/main/RTC%20demo.mp4"
-         width="100%"
-         controls>
-  </video>
-</p>
 
-<p align="center">
-  <b>▶️ Live collaboration demo</b> · 3.5 MB
-</p>
+https://github.com/user-attachments/assets/86d686eb-76a6-4b7e-985c-04ff88f855c6
 
 
 > The video shows two Godot instances in the same `project:<hash>` room moving the **Cube** in `GRTC.tscn`. The change streams over WebSocket and applies instantly on the other editor.

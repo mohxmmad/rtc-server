@@ -20,15 +20,16 @@
 ### 🎬 Live Demo — Two Editors, One Project
 
 <p align="center">
-  <video width="100%" controls autoplay muted loop playsinline poster="screenshots/collaboration.png">
-    <source src="https://raw.githubusercontent.com/Mohammad-416/rtc-server/main/RTC%20demo.mp4" type="video/mp4">
-    <source src="./RTC%20demo.mp4" type="video/mp4">
+  <video src="https://github.com/Mohammad-416/rtc-server/raw/refs/heads/main/RTC%20demo.mp4"
+         width="100%"
+         controls>
   </video>
 </p>
 
 <p align="center">
-  <a href="https://raw.githubusercontent.com/Mohammad-416/rtc-server/main/RTC%20demo.mp4"><b>▶️ Play / Download RTC demo.mp4</b></a> • 3.5 MB • If the player doesn't load, open the link above
+  <b>▶️ Live collaboration demo</b> · 3.5 MB
 </p>
+
 
 > The video shows two Godot instances in the same `project:<hash>` room moving the **Cube** in `GRTC.tscn`. The change streams over WebSocket and applies instantly on the other editor.
 
@@ -125,7 +126,7 @@ rtc-server/
 
 ## Tech Stack
 
-`Go 1.24` • `net/http` + `gorilla/mux` + `gorilla/handlers` + `gorilla/websocket` • `PostgreSQL` + `lib/pq` • `golang.org/x/oauth2` (GitHub) • `google/uuid` • `joho/godotenv`
+`Go 1.24` • `net/http` + `gorilla/mux` + `gorilla/handlers` + `gorilla/websocket` • `PostgreSQL` + `lib/pq` • `golang.org/x/oauth2` • `google/uuid` • `joho/godotenv`
 
 ---
 

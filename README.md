@@ -124,8 +124,8 @@ rtc-server/
 
 <p align="center">
 
-**MIT** — github.com/Mohammad-416 • 2025-2026
+**MIT** — github.com/Mohxmmad • 2025-2026
 
-Built for GRTC — Godot Realtime Collaboration
+Built for GRTC — Godot Realtime Collaboration 
 
 </p>
